@@ -17,7 +17,8 @@ const (
 
 	// DefaultTimeout is the default HTTP client timeout.
 	// Increased from 30s to 120s to better handle slower streaming and large completions.
-	DefaultTimeout = 120 * time.Second
+	// NOTE: I found 120s still too short for large o1 model requests; bumped to 300s.
+	DefaultTimeout = 300 * time.Second
 
 	// Version is the current version of this client library.
 	Version = "0.1.0"
@@ -115,4 +116,4 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}) error
 		var apiErr apiErrorResponse
 		if jsonErr := json.Unmarshal(body, &apiErr); jsonErr == nil && apiErr.Error != nil {
 			apiErr.Error.StatusCode = resp.StatusCode
-			return apiErr.E
+			return apiErr
