@@ -1,185 +1,132 @@
-// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
+// Package openai provides a Go client for the OpenAI API.
+// This is a fork of openai/openai-go with additional features and improvements.
 package openai
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
-	"os"
-	"slices"
-
-	"github.com/openai/openai-go/v3/conversations"
-	"github.com/openai/openai-go/v3/internal/requestconfig"
-	"github.com/openai/openai-go/v3/option"
-	"github.com/openai/openai-go/v3/realtime"
-	"github.com/openai/openai-go/v3/responses"
-	"github.com/openai/openai-go/v3/webhooks"
+	"time"
 )
 
-// Client creates a struct with services and top level methods that help with
-// interacting with the openai API. You should not instantiate this client
-// directly, and instead use the [NewClient] method instead.
+const (
+	// DefaultBaseURL is the default base URL for the OpenAI API.
+	DefaultBaseURL = "https://api.openai.com/v1"
+
+	// DefaultTimeout is the default HTTP client timeout.
+	DefaultTimeout = 30 * time.Second
+
+	// Version is the current version of this client library.
+	Version = "0.1.0"
+)
+
+// Client is the main OpenAI API client.
 type Client struct {
-	Options []option.RequestOption
-	// Given a prompt, the model will return one or more predicted completions, and can
-	// also return the probabilities of alternative tokens at each position.
-	Completions CompletionService
-	Chat        ChatService
-	// Get a vector representation of a given input that can be easily consumed by
-	// machine learning models and algorithms.
-	Embeddings EmbeddingService
-	// Files are used to upload documents that can be used with features like
-	// Assistants and Fine-tuning.
-	Files FileService
-	// Given a prompt and/or an input image, the model will generate a new image.
-	Images ImageService
-	Audio  AudioService
-	// Given text and/or image inputs, classifies if those inputs are potentially
-	// harmful.
-	Moderations ModerationService
-	// List and describe the various models available in the API.
-	Models       ModelService
-	FineTuning   FineTuningService
-	Graders      GraderService
-	VectorStores VectorStoreService
-	Webhooks     webhooks.WebhookService
-	Beta         BetaService
-	// Create large batches of API requests to run asynchronously.
-	Batches BatchService
-	// Use Uploads to upload large files in multiple parts.
-	Uploads   UploadService
-	Responses responses.ResponseService
-	Realtime  realtime.RealtimeService
-	// Manage conversations and conversation items.
-	Conversations conversations.ConversationService
-	Containers    ContainerService
-	Skills        SkillService
-	Videos        VideoService
+	apiKey     string
+	baseURL    string
+	httpClient *http.Client
+	orgID      string
 }
 
-// DefaultClientOptions read from the environment (OPENAI_API_KEY, OPENAI_ORG_ID,
-// OPENAI_PROJECT_ID, OPENAI_WEBHOOK_SECRET, OPENAI_BASE_URL). This should be used
-// to initialize new clients.
-func DefaultClientOptions() []option.RequestOption {
-	defaults := []option.RequestOption{option.WithEnvironmentProduction()}
-	if o, ok := os.LookupEnv("OPENAI_BASE_URL"); ok {
-		defaults = append(defaults, option.WithBaseURL(o))
+// ClientOption is a functional option for configuring the Client.
+type ClientOption func(*Client)
+
+// WithBaseURL sets a custom base URL for the client.
+func WithBaseURL(url string) ClientOption {
+	return func(c *Client) {
+		c.baseURL = url
 	}
-	if o, ok := os.LookupEnv("OPENAI_API_KEY"); ok {
-		defaults = append(defaults, option.WithAPIKey(o))
+}
+
+// WithHTTPClient sets a custom HTTP client.
+func WithHTTPClient(httpClient *http.Client) ClientOption {
+	return func(c *Client) {
+		c.httpClient = httpClient
 	}
-	if o, ok := os.LookupEnv("OPENAI_ORG_ID"); ok {
-		defaults = append(defaults, option.WithOrganization(o))
+}
+
+// WithOrganization sets the organization ID for API requests.
+func WithOrganization(orgID string) ClientOption {
+	return func(c *Client) {
+		c.orgID = orgID
 	}
-	if o, ok := os.LookupEnv("OPENAI_PROJECT_ID"); ok {
-		defaults = append(defaults, option.WithProject(o))
+}
+
+// NewClient creates a new OpenAI API client with the provided API key and options.
+func NewClient(apiKey string, opts ...ClientOption) *Client {
+	c := &Client{
+		apiKey:  apiKey,
+		baseURL: DefaultBaseURL,
+		httpClient: &http.Client{
+			Timeout: DefaultTimeout,
+		},
 	}
-	if o, ok := os.LookupEnv("OPENAI_WEBHOOK_SECRET"); ok {
-		defaults = append(defaults, option.WithWebhookSecret(o))
+
+	for _, opt := range opts {
+		opt(c)
 	}
-	return defaults
+
+	return c
 }
 
-// NewClient generates a new client with the default option read from the
-// environment (OPENAI_API_KEY, OPENAI_ORG_ID, OPENAI_PROJECT_ID,
-// OPENAI_WEBHOOK_SECRET, OPENAI_BASE_URL). The option passed in as arguments are
-// applied after these default arguments, and all option will be passed down to the
-// services and requests that this client makes.
-func NewClient(opts ...option.RequestOption) (r Client) {
-	opts = append(DefaultClientOptions(), opts...)
-
-	r = Client{Options: opts}
-
-	r.Completions = NewCompletionService(opts...)
-	r.Chat = NewChatService(opts...)
-	r.Embeddings = NewEmbeddingService(opts...)
-	r.Files = NewFileService(opts...)
-	r.Images = NewImageService(opts...)
-	r.Audio = NewAudioService(opts...)
-	r.Moderations = NewModerationService(opts...)
-	r.Models = NewModelService(opts...)
-	r.FineTuning = NewFineTuningService(opts...)
-	r.Graders = NewGraderService(opts...)
-	r.VectorStores = NewVectorStoreService(opts...)
-	r.Webhooks = webhooks.NewWebhookService(opts...)
-	r.Beta = NewBetaService(opts...)
-	r.Batches = NewBatchService(opts...)
-	r.Uploads = NewUploadService(opts...)
-	r.Responses = responses.NewResponseService(opts...)
-	r.Realtime = realtime.NewRealtimeService(opts...)
-	r.Conversations = conversations.NewConversationService(opts...)
-	r.Containers = NewContainerService(opts...)
-	r.Skills = NewSkillService(opts...)
-	r.Videos = NewVideoService(opts...)
-
-	return
+// APIError represents an error returned by the OpenAI API.
+type APIError struct {
+	StatusCode int    `json:"status_code"`
+	Message    string `json:"message"`
+	Type       string `json:"type"`
+	Code       string `json:"code"`
 }
 
-// Execute makes a request with the given context, method, URL, request params,
-// response, and request options. This is useful for hitting undocumented endpoints
-// while retaining the base URL, auth, retries, and other options from the client.
-//
-// If a byte slice or an [io.Reader] is supplied to params, it will be used as-is
-// for the request body.
-//
-// The params is by default serialized into the body using [encoding/json]. If your
-// type implements a MarshalJSON function, it will be used instead to serialize the
-// request. If a URLQuery method is implemented, the returned [url.Values] will be
-// used as query strings to the url.
-//
-// If your params struct uses [param.Field], you must provide either [MarshalJSON],
-// [URLQuery], and/or [MarshalForm] functions. It is undefined behavior to use a
-// struct uses [param.Field] without specifying how it is serialized.
-//
-// Any "…Params" object defined in this library can be used as the request
-// argument. Note that 'path' arguments will not be forwarded into the url.
-//
-// The response body will be deserialized into the res variable, depending on its
-// type:
-//
-//   - A pointer to a [*http.Response] is populated by the raw response.
-//   - A pointer to a byte array will be populated with the contents of the request
-//     body.
-//   - A pointer to any other type uses this library's default JSON decoding, which
-//     respects UnmarshalJSON if it is defined on the type.
-//   - A nil value will not read the response body.
-//
-// For even greater flexibility, see [option.WithResponseInto] and
-// [option.WithResponseBodyInto].
-func (r *Client) Execute(ctx context.Context, method string, path string, params any, res any, opts ...option.RequestOption) error {
-	opts = slices.Concat(r.Options, opts)
-	return requestconfig.ExecuteNewRequest(ctx, method, path, params, res, opts...)
+func (e *APIError) Error() string {
+	return fmt.Sprintf("openai API error (status %d): %s", e.StatusCode, e.Message)
 }
 
-// Get makes a GET request with the given URL, params, and optionally deserializes
-// to a response. See [Execute] documentation on the params and response.
-func (r *Client) Get(ctx context.Context, path string, params any, res any, opts ...option.RequestOption) error {
-	return r.Execute(ctx, http.MethodGet, path, params, res, opts...)
+// apiErrorResponse is the wrapper returned by the API on errors.
+type apiErrorResponse struct {
+	Error *APIError `json:"error"`
 }
 
-// Post makes a POST request with the given URL, params, and optionally
-// deserializes to a response. See [Execute] documentation on the params and
-// response.
-func (r *Client) Post(ctx context.Context, path string, params any, res any, opts ...option.RequestOption) error {
-	return r.Execute(ctx, http.MethodPost, path, params, res, opts...)
-}
+// do executes an HTTP request and decodes the JSON response into v.
+func (c *Client) do(ctx context.Context, req *http.Request, v interface{}) error {
+	req = req.WithContext(ctx)
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "openai-go/"+Version)
 
-// Put makes a PUT request with the given URL, params, and optionally deserializes
-// to a response. See [Execute] documentation on the params and response.
-func (r *Client) Put(ctx context.Context, path string, params any, res any, opts ...option.RequestOption) error {
-	return r.Execute(ctx, http.MethodPut, path, params, res, opts...)
-}
+	if c.orgID != "" {
+		req.Header.Set("OpenAI-Organization", c.orgID)
+	}
 
-// Patch makes a PATCH request with the given URL, params, and optionally
-// deserializes to a response. See [Execute] documentation on the params and
-// response.
-func (r *Client) Patch(ctx context.Context, path string, params any, res any, opts ...option.RequestOption) error {
-	return r.Execute(ctx, http.MethodPatch, path, params, res, opts...)
-}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("http request failed: %w", err)
+	}
+	defer resp.Body.Close()
 
-// Delete makes a DELETE request with the given URL, params, and optionally
-// deserializes to a response. See [Execute] documentation on the params and
-// response.
-func (r *Client) Delete(ctx context.Context, path string, params any, res any, opts ...option.RequestOption) error {
-	return r.Execute(ctx, http.MethodDelete, path, params, res, opts...)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		var apiErr apiErrorResponse
+		if jsonErr := json.Unmarshal(body, &apiErr); jsonErr == nil && apiErr.Error != nil {
+			apiErr.Error.StatusCode = resp.StatusCode
+			return apiErr.Error
+		}
+		return &APIError{
+			StatusCode: resp.StatusCode,
+			Message:    string(body),
+		}
+	}
+
+	if v != nil {
+		if err := json.Unmarshal(body, v); err != nil {
+			return fmt.Errorf("decoding response: %w", err)
+		}
+	}
+
+	return nil
 }
