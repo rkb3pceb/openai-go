@@ -16,8 +16,8 @@ const (
 	DefaultBaseURL = "https://api.openai.com/v1"
 
 	// DefaultTimeout is the default HTTP client timeout.
-	// Increased from 30s to 60s to better handle slower streaming and large completions.
-	DefaultTimeout = 60 * time.Second
+	// Increased from 30s to 120s to better handle slower streaming and large completions.
+	DefaultTimeout = 120 * time.Second
 
 	// Version is the current version of this client library.
 	Version = "0.1.0"
@@ -115,19 +115,4 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}) error
 		var apiErr apiErrorResponse
 		if jsonErr := json.Unmarshal(body, &apiErr); jsonErr == nil && apiErr.Error != nil {
 			apiErr.Error.StatusCode = resp.StatusCode
-			return apiErr.Error
-		}
-		return &APIError{
-			StatusCode: resp.StatusCode,
-			Message:    string(body),
-		}
-	}
-
-	if v != nil {
-		if err := json.Unmarshal(body, v); err != nil {
-			return fmt.Errorf("decoding response: %w", err)
-		}
-	}
-
-	return nil
-}
+			return apiErr.E
