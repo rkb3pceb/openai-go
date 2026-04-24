@@ -16,7 +16,8 @@ const (
 	DefaultBaseURL = "https://api.openai.com/v1"
 
 	// DefaultTimeout is the default HTTP client timeout.
-	DefaultTimeout = 30 * time.Second
+	// Increased from 30s to 60s to better handle slower streaming and large completions.
+	DefaultTimeout = 60 * time.Second
 
 	// Version is the current version of this client library.
 	Version = "0.1.0"
