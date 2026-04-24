@@ -95,7 +95,7 @@ client := openai.NewClient(
 	option.WithAPIKey("your-api-key"),
 	option.WithBaseURL("https://api.openai.com/v1"),
 	option.WithOrganization("your-org-id"),
-	option.WithMaxRetries(3),
+	option.WithMaxRetries(5), // increased from default of 3 for better reliability
 )
 ```
 
