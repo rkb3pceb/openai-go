@@ -111,9 +111,23 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}) error
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
+		return fmt.Errorf("reading response body failed: %w", err)
 	}
 
-	if resp.StatusCode >= 400 {
-		var apiErr apiErrorResponse
-		if jsonErr := json.Unmarshal(body, &apiErr); jsonErr == nil &&
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var errResp apiErrorResponse
+		if jsonErr := json.Unmarshal(body, &errResp); jsonErr == nil && errResp.Error != nil {
+			errResp.Error.StatusCode = resp.StatusCode
+			return errResp.Error
+		}
+		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+	}
+
+	if v != nil {
+		if err := json.Unmarshal(body, v); err != nil {
+			return fmt.Errorf("decoding response failed: %w", err)
+		}
+	}
+
+	return nil
+}
