@@ -18,6 +18,7 @@ const (
 	// DefaultTimeout is the default HTTP client timeout.
 	// Increased from 30s to 120s to better handle slower streaming and large completions.
 	// NOTE: I found 120s still too short for large o1 model requests; bumped to 300s.
+	// NOTE: 300s also occasionally times out on very long o1-pro requests; may need to go higher.
 	DefaultTimeout = 300 * time.Second
 
 	// Version is the current version of this client library.
@@ -95,7 +96,8 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}) error
 	req = req.WithContext(ctx)
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "openai-go/"+Version)
+	// Use a custom User-Agent so I can identify my fork's requests in API usage logs.
+	req.Header.Set("User-Agent", "openai-go-fork/"+Version)
 
 	if c.orgID != "" {
 		req.Header.Set("OpenAI-Organization", c.orgID)
@@ -114,6 +116,4 @@ func (c *Client) do(ctx context.Context, req *http.Request, v interface{}) error
 
 	if resp.StatusCode >= 400 {
 		var apiErr apiErrorResponse
-		if jsonErr := json.Unmarshal(body, &apiErr); jsonErr == nil && apiErr.Error != nil {
-			apiErr.Error.StatusCode = resp.StatusCode
-			return apiErr
+		if jsonErr := json.Unmarshal(body, &apiErr); jsonErr == nil &&
